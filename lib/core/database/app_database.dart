@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import 'daos/tasks_dao.dart';
 import 'tables/tasks_table.dart';
 
 part 'app_database.g.dart';
@@ -9,7 +10,7 @@ part 'app_database.g.dart';
 ///
 /// Instancia única registrada en `main.dart`. Las nuevas tablas se agregan
 /// a la lista de `@DriftDatabase` y se incrementa [schemaVersion].
-@DriftDatabase(tables: [Tasks])
+@DriftDatabase(tables: [Tasks], daos: [TasksDao])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 

@@ -1,29 +1,58 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_colors.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../../core/database/app_database.dart';
 import '../../data/repositories/tasks_repository_impl.dart';
 import '../../domain/entities/task.dart';
-import '../../domain/repositories/tasks_repository.dart';
+import '../cubit/tasks_cubit.dart';
+import '../widgets/task_form_sheet.dart';
 import '../widgets/task_tile.dart';
+import '../../../../core/theme/app_colors.dart';
 
-class TasksPage extends StatefulWidget {
+class TasksPage extends StatelessWidget {
   const TasksPage({super.key});
 
   @override
-  State<TasksPage> createState() => _TasksPageState();
+  Widget build(BuildContext context) {
+    final db = context.read<AppDatabase>();
+    return BlocProvider(
+      create: (_) => TasksCubit(TasksRepositoryImpl(db.tasksDao))..init(),
+      child: const _TasksView(),
+    );
+  }
 }
 
-class _TasksPageState extends State<TasksPage> {
-  final TasksRepository _repository = TasksRepositoryImpl();
-  TaskFilter _filter = TaskFilter.todas;
+class _TasksView extends StatelessWidget {
+  const _TasksView();
 
-  late Future<List<TaskItem>> _today;
-  late Future<List<TaskItem>> _tomorrow;
+  Future<void> _openForm(BuildContext context, {TaskItem? initial}) async {
+    final cubit = context.read<TasksCubit>();
+    final result = await showTaskFormSheet(context, initial: initial);
+    if (result == null) return;
 
-  @override
-  void initState() {
-    super.initState();
-    _today = _repository.getTodayTasks();
-    _tomorrow = _repository.getTomorrowTasks();
+    if (initial == null) {
+      await cubit.addTask(
+        TaskItem(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          title: result.title,
+          time: result.time,
+          completed: false,
+          category: result.category,
+          date: result.date,
+        ),
+      );
+    } else {
+      await cubit.updateTask(
+        TaskItem(
+          id: initial.id,
+          title: result.title,
+          time: result.time,
+          completed: initial.completed,
+          category: result.category,
+          date: result.date,
+        ),
+      );
+    }
   }
 
   @override
@@ -33,25 +62,44 @@ class _TasksPageState extends State<TasksPage> {
         leading: IconButton(icon: const Icon(Icons.menu), onPressed: () {}),
         title: const Text('Tareas'),
         actions: [
-          IconButton(icon: const Icon(Icons.add), onPressed: () {}),
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () => _openForm(context),
+          ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _FilterBar(
-            current: _filter,
-            onChange: (f) => setState(() => _filter = f),
-          ),
-          const SizedBox(height: 20),
-          const _SectionTitle('Hoy'),
-          const SizedBox(height: 10),
-          _TaskList(future: _today),
-          const SizedBox(height: 24),
-          const _SectionTitle('Mañana'),
-          const SizedBox(height: 10),
-          _TaskList(future: _tomorrow),
-        ],
+      body: BlocBuilder<TasksCubit, TasksState>(
+        builder: (context, state) {
+          if (state.status == TasksStatus.loading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (state.status == TasksStatus.error) {
+            return Center(child: Text('Error: ${state.errorMessage ?? ''}'));
+          }
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              _FilterBar(
+                current: state.filter,
+                onChange: (f) => context.read<TasksCubit>().changeFilter(f),
+              ),
+              const SizedBox(height: 20),
+              const _SectionTitle('Hoy'),
+              const SizedBox(height: 10),
+              _TaskList(
+                tasks: state.todayTasks,
+                emptyLabel: 'Sin tareas para hoy',
+              ),
+              const SizedBox(height: 24),
+              const _SectionTitle('Mañana'),
+              const SizedBox(height: 10),
+              _TaskList(
+                tasks: state.tomorrowTasks,
+                emptyLabel: 'Sin tareas para mañana',
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -69,24 +117,75 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _TaskList extends StatelessWidget {
-  final Future<List<TaskItem>> future;
-  const _TaskList({required this.future});
+  final List<TaskItem> tasks;
+  final String emptyLabel;
+  const _TaskList({required this.tasks, required this.emptyLabel});
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<TaskItem>>(
-      future: future,
-      builder: (context, snap) {
-        if (!snap.hasData) return const SizedBox.shrink();
-        return Column(
-          children: [
-            for (final t in snap.data!) ...[
-              TaskTile(task: t),
-              const SizedBox(height: 10),
-            ],
-          ],
-        );
-      },
+    if (tasks.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          emptyLabel,
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+      );
+    }
+    return Column(
+      children: [
+        for (final t in tasks) ...[
+          _DismissibleTask(task: t),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _DismissibleTask extends StatelessWidget {
+  final TaskItem task;
+  const _DismissibleTask({required this.task});
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<TasksCubit>();
+    return Dismissible(
+      key: ValueKey(task.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          color: AppColors.danger,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      onDismissed: (_) => cubit.deleteTask(task.id),
+      child: GestureDetector(
+        onTap: () => _editTask(context),
+        child: TaskTile(
+          task: task,
+          onToggle: () => cubit.toggleCompleted(task),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editTask(BuildContext context) async {
+    final cubit = context.read<TasksCubit>();
+    final result = await showTaskFormSheet(context, initial: task);
+    if (result == null) return;
+    await cubit.updateTask(
+      TaskItem(
+        id: task.id,
+        title: result.title,
+        time: result.time,
+        completed: task.completed,
+        category: result.category,
+        date: result.date,
+      ),
     );
   }
 }
