@@ -1,39 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/database/app_database.dart' show AppDatabase;
 import '../../../../core/theme/app_colors.dart';
 import '../../data/repositories/stats_repository_impl.dart';
-import '../../domain/entities/weekly_stats.dart';
-import '../../domain/repositories/stats_repository.dart';
+import '../cubit/stats_cubit.dart';
 import '../widgets/donut_progress.dart';
 import '../widgets/weekly_bars.dart';
 
-class StatsPage extends StatefulWidget {
+class StatsPage extends StatelessWidget {
   const StatsPage({super.key});
 
   @override
-  State<StatsPage> createState() => _StatsPageState();
+  Widget build(BuildContext context) {
+    final db = context.read<AppDatabase>();
+    return BlocProvider(
+      create: (_) => StatsCubit(StatsRepositoryImpl(db.tasksDao))..init(),
+      child: const _StatsView(),
+    );
+  }
 }
 
-class _StatsPageState extends State<StatsPage> {
-  final StatsRepository _repository = StatsRepositoryImpl();
-  late Future<WeeklyStats> _stats;
-
-  @override
-  void initState() {
-    super.initState();
-    _stats = _repository.getWeeklyStats();
-  }
+class _StatsView extends StatelessWidget {
+  const _StatsView();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Estadísticas')),
-      body: FutureBuilder<WeeklyStats>(
-        future: _stats,
-        builder: (context, snap) {
-          if (!snap.hasData) {
+      body: BlocBuilder<StatsCubit, StatsState>(
+        builder: (context, state) {
+          if (state.status == StatsStatus.loading || state.stats == null) {
             return const Center(child: CircularProgressIndicator());
           }
-          final s = snap.data!;
+          if (state.status == StatsStatus.error) {
+            return Center(child: Text('Error: ${state.errorMessage ?? ''}'));
+          }
+          final s = state.stats!;
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
