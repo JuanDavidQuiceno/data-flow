@@ -4,7 +4,8 @@ import '../../domain/entities/habit.dart';
 
 class HabitTile extends StatelessWidget {
   final Habit habit;
-  const HabitTile({super.key, required this.habit});
+  final VoidCallback? onToggle;
+  const HabitTile({super.key, required this.habit, this.onToggle});
 
   @override
   Widget build(BuildContext context) {
@@ -27,22 +28,25 @@ class HabitTile extends StatelessWidget {
               ),
             ),
           ),
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: habit.completed ? AppColors.success : Colors.transparent,
-              border: Border.all(
-                color: habit.completed
-                    ? AppColors.success
-                    : AppColors.border,
-                width: 2,
+          GestureDetector(
+            onTap: onToggle,
+            child: Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: habit.completed ? AppColors.success : Colors.transparent,
+                border: Border.all(
+                  color: habit.completed
+                      ? AppColors.success
+                      : AppColors.border,
+                  width: 2,
+                ),
               ),
+              child: habit.completed
+                  ? const Icon(Icons.check, color: Colors.white, size: 16)
+                  : null,
             ),
-            child: habit.completed
-                ? const Icon(Icons.check, color: Colors.white, size: 16)
-                : null,
           ),
         ],
       ),
