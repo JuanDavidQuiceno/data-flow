@@ -35,9 +35,21 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # Persistencia local (SQLite) con queries tipadas y reactividad por Streams.
+  drift: ^2.18.0
+  drift_flutter: ^0.2.0
+
+  # Gestión de estado por feature (Cubit).
+  flutter_bloc: ^8.1.6
+  equatable: ^2.0.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  # Generación de código para Drift.
+  drift_dev: ^2.18.0
+  build_runner: ^2.4.11
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
