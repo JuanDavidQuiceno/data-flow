@@ -50,7 +50,10 @@ class _HabitFormSheetState extends State<_HabitFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    // viewInsets.bottom puede llegar negativo durante la animación de
+    // cierre del teclado/sheet; Padding no admite valores negativos.
+    final bottomInset =
+        MediaQuery.of(context).viewInsets.bottom.clamp(0.0, double.infinity);
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(
