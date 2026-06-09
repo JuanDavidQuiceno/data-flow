@@ -1,29 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../../core/database/app_database.dart' show AppDatabase;
 import '../../../../core/theme/app_colors.dart';
 import '../../data/repositories/home_repository_impl.dart';
-import '../../domain/entities/activity.dart';
-import '../../domain/repositories/home_repository.dart';
+import '../cubit/home_cubit.dart';
 import '../widgets/activity_tile.dart';
 import '../widgets/summary_card.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  Widget build(BuildContext context) {
+    final db = context.read<AppDatabase>();
+    return BlocProvider(
+      create: (_) => HomeCubit(HomeRepositoryImpl(db.tasksDao))..init(),
+      child: const _HomeView(),
+    );
+  }
 }
 
-class _HomePageState extends State<HomePage> {
-  final HomeRepository _repository = HomeRepositoryImpl();
-  late Future<DailySummary> _summary;
-  late Future<List<Activity>> _activities;
-
-  @override
-  void initState() {
-    super.initState();
-    _summary = _repository.getDailySummary();
-    _activities = _repository.getUpcomingActivities();
-  }
+class _HomeView extends StatelessWidget {
+  const _HomeView();
 
   @override
   Widget build(BuildContext context) {
@@ -41,13 +40,15 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: FutureBuilder<DailySummary>(
-        future: _summary,
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
+      body: BlocBuilder<HomeCubit, HomeState>(
+        builder: (context, state) {
+          if (state.status == HomeStatus.loading || state.summary == null) {
             return const Center(child: CircularProgressIndicator());
           }
-          final s = snapshot.data!;
+          if (state.status == HomeStatus.error) {
+            return Center(child: Text('Error: ${state.errorMessage ?? ''}'));
+          }
+          final s = state.summary!;
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
@@ -57,8 +58,7 @@ class _HomePageState extends State<HomePage> {
                   style: const TextStyle(color: AppColors.textSecondary)),
               const SizedBox(height: 24),
               const Text('Resumen de hoy',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -92,25 +92,24 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 28),
               const Text('Próximas actividades',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
-              FutureBuilder<List<Activity>>(
-                future: _activities,
-                builder: (context, snap) {
-                  if (!snap.hasData) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    children: [
-                      for (final a in snap.data!) ...[
-                        ActivityTile(activity: a),
-                        const SizedBox(height: 10),
-                      ],
-                    ],
-                  );
-                },
-              ),
+              if (state.activities.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'No tienes actividades para hoy.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                )
+              else
+                for (final a in state.activities) ...[
+                  ActivityTile(activity: a),
+                  const SizedBox(height: 10),
+                ],
             ],
           );
         },
